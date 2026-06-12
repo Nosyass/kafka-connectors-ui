@@ -109,7 +109,9 @@ const model = {
   loadedOnce: false,
   stateByName: {},
   toastSeq: 0,
-  envConfigSource: 'localStorage'
+  envConfigSource: 'localStorage',
+  loading: false,
+  requestSeq: 0
 };
 
 if (location.protocol === 'file:') {
@@ -210,15 +212,27 @@ async function fetchJson(path, options = {}) {
 }
 
 async function loadConnectors(selectName, options = {}) {
+  const requestId = ++model.requestSeq;
+  const requestEnv = model.env;
+  const requestMode = model.mode;
   const notifyLoaded = Boolean(options.notifyLoaded);
   const notifyChanges = options.notifyChanges !== false;
   const previousState = model.stateByName || {};
   model.lastError = null;
+  model.loading = true;
+  if (options.clearBefore) {
+    model.connectors = [];
+    model.selected = null;
+    render();
+  }
   try {
     const [cluster, expanded] = await Promise.all([
       fetchJson('/').catch(e => ({ error: e.message })),
       fetchJson('/connectors?expand=status&expand=info')
     ]);
+    if (requestId !== model.requestSeq || requestEnv !== model.env || requestMode !== model.mode) {
+      return;
+    }
     model.cluster = cluster;
     model.connectors = normalizeConnectors(expanded);
     if (selectName) model.selected = model.connectors.find(c => c.name === selectName) || null;
@@ -229,10 +243,15 @@ async function loadConnectors(selectName, options = {}) {
       toast(`${model.connectors.length} connectors loaded`, 'ok');
     }
     model.loadedOnce = true;
+    model.loading = false;
   } catch (e) {
+    if (requestId !== model.requestSeq || requestEnv !== model.env || requestMode !== model.mode) {
+      return;
+    }
     model.lastError = e.message || String(e);
     model.connectors = [];
     model.selected = null;
+    model.loading = false;
     toast(model.lastError, 'error');
   }
   render();
@@ -380,6 +399,11 @@ function renderTable() {
       </td>
     </tr>`;
   }).join('');
+  if (model.loading && !model.connectors.length) {
+    document.querySelector('#connectors-table tbody').innerHTML =
+      '<tr><td colspan="5" class="muted">Chargement des connecteurs...</td></tr>';
+    return;
+  }
   document.querySelector('#connectors-table tbody').innerHTML =
     rows || `<tr><td colspan="5" class="${model.lastError ? 'error' : 'muted'}">${esc(model.lastError || 'Aucun connecteur.')}</td></tr>`;
 }
@@ -537,7 +561,7 @@ function toast(message, type = 'info') {
   root.prepend(el);
   window.setTimeout(() => {
     if (el.isConnected) el.remove();
-  }, type === 'error' ? 9000 : 5500);
+  }, 2000);
 }
 
 function exportConfig() {
@@ -578,15 +602,24 @@ $('env-select').addEventListener('change', e => {
   localStorage.setItem('bpp.kafka.connect.console.selectedEnv', model.env);
   model.selected = null;
   model.loadedOnce = false;
+  model.lastError = null;
+  model.cluster = null;
+  model.connectors = [];
+  model.stateByName = {};
   render();
-  loadConnectors(null, { notifyLoaded: true });
+  loadConnectors(null, { notifyLoaded: true, clearBefore: true });
 });
 $('mode-select').addEventListener('change', e => {
   model.mode = e.target.value;
   localStorage.setItem('bpp.kafka.connect.console.mode', model.mode);
+  model.selected = null;
   model.loadedOnce = false;
+  model.lastError = null;
+  model.cluster = null;
+  model.connectors = [];
+  model.stateByName = {};
   render();
-  loadConnectors(model.selected && model.selected.name, { notifyLoaded: true });
+  loadConnectors(null, { notifyLoaded: true, clearBefore: true });
 });
 $('save-env').addEventListener('click', () => {
   model.envs[model.env] = { ...(model.envs[model.env] || {}), url: $('base-url').value.trim() };
@@ -596,10 +629,15 @@ $('save-env').addEventListener('click', () => {
   localStorage.setItem('bpp.kafka.connect.console.authHeader', model.authHeader);
   saveEnvs();
   toast(`Configuration saved for ${model.env.toUpperCase()}`, 'ok');
+  model.selected = null;
   model.loadedOnce = false;
-  loadConnectors(model.selected && model.selected.name, { notifyLoaded: true });
+  model.lastError = null;
+  model.cluster = null;
+  model.connectors = [];
+  model.stateByName = {};
+  loadConnectors(null, { notifyLoaded: true, clearBefore: true });
 });
-$('refresh').addEventListener('click', () => loadConnectors(model.selected && model.selected.name, { notifyLoaded: true }));
+$('refresh').addEventListener('click', () => loadConnectors(model.selected && model.selected.name, { notifyLoaded: true, clearBefore: true }));
 $('search').addEventListener('input', renderTable);
 $('state-filter').addEventListener('change', renderTable);
 $('export-config').addEventListener('click', exportConfig);

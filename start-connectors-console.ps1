@@ -21,20 +21,24 @@ function Read-EnvConfig {
 
 function Send-Text($ctx, [int]$status, [string]$text, [string]$contentType = "text/plain; charset=utf-8") {
   $bytes = [Text.Encoding]::UTF8.GetBytes($text)
-  $ctx.Response.StatusCode = $status
-  $ctx.Response.ContentType = $contentType
-  $ctx.Response.ContentLength64 = $bytes.Length
-  $ctx.Response.OutputStream.Write($bytes, 0, $bytes.Length)
-  $ctx.Response.Close()
+  try {
+    $ctx.Response.StatusCode = $status
+    $ctx.Response.ContentType = $contentType
+    $ctx.Response.OutputStream.Write($bytes, 0, $bytes.Length)
+  } finally {
+    try { $ctx.Response.Close() } catch {}
+  }
 }
 
 function Send-File($ctx, [string]$path, [string]$contentType) {
   $bytes = [IO.File]::ReadAllBytes($path)
-  $ctx.Response.StatusCode = 200
-  $ctx.Response.ContentType = $contentType
-  $ctx.Response.ContentLength64 = $bytes.Length
-  $ctx.Response.OutputStream.Write($bytes, 0, $bytes.Length)
-  $ctx.Response.Close()
+  try {
+    $ctx.Response.StatusCode = 200
+    $ctx.Response.ContentType = $contentType
+    $ctx.Response.OutputStream.Write($bytes, 0, $bytes.Length)
+  } finally {
+    try { $ctx.Response.Close() } catch {}
+  }
 }
 
 function Content-TypeFor([string]$path) {
@@ -130,6 +134,10 @@ while ($listener.IsListening) {
     }
     Send-File $ctx $full (Content-TypeFor $full)
   } catch {
-    Send-Text $ctx 500 $_.Exception.Message
+    try {
+      Send-Text $ctx 500 $_.Exception.Message
+    } catch {
+      try { $ctx.Response.Abort() } catch {}
+    }
   }
 }
