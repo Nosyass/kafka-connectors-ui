@@ -368,9 +368,15 @@ function filteredConnectors() {
 
 function render() {
   renderHeader();
+  renderFilterControls();
   renderSummary();
   renderTable();
   renderDetail();
+}
+
+function renderFilterControls() {
+  $('search').classList.toggle('filter-active', Boolean($('search').value.trim()));
+  $('state-filter').classList.toggle('filter-active', Boolean($('state-filter').value));
 }
 
 function renderEnvSelect() {
@@ -507,6 +513,7 @@ function closeDetail() {
 
 function setStateFilter(value) {
   $('state-filter').value = value;
+  renderFilterControls();
   renderTable();
 }
 
@@ -670,8 +677,14 @@ $('save-env').addEventListener('click', () => {
   loadConnectors(null, { notifyLoaded: true, clearBefore: true });
 });
 $('refresh').addEventListener('click', () => loadConnectors(model.selected && model.selected.name, { notifyLoaded: true, clearBefore: true }));
-$('search').addEventListener('input', renderTable);
-$('state-filter').addEventListener('change', renderTable);
+$('search').addEventListener('input', () => {
+  renderFilterControls();
+  renderTable();
+});
+$('state-filter').addEventListener('change', () => {
+  renderFilterControls();
+  renderTable();
+});
 $('export-config').addEventListener('click', exportConfig);
 $('import-config').addEventListener('click', () => $('file-input').click());
 $('file-input').addEventListener('change', e => e.target.files[0] && importConfig(e.target.files[0]));

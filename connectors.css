@@ -118,6 +118,25 @@ textarea:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(56, 189, 248, .12);
 }
+.filter-active {
+  border-color: rgba(56, 189, 248, .95);
+  box-shadow:
+    0 0 0 2px rgba(56, 189, 248, .16),
+    0 0 16px rgba(56, 189, 248, .28);
+  animation: filter-glow 1.8s ease-in-out infinite;
+}
+@keyframes filter-glow {
+  0%, 100% {
+    box-shadow:
+      0 0 0 2px rgba(56, 189, 248, .12),
+      0 0 10px rgba(56, 189, 248, .20);
+  }
+  50% {
+    box-shadow:
+      0 0 0 2px rgba(56, 189, 248, .24),
+      0 0 18px rgba(56, 189, 248, .34);
+  }
+}
 
 #env-select { min-width: 120px; }
 #mode-select { min-width: 180px; }
