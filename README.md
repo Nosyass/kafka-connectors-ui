@@ -24,6 +24,8 @@ notepad connectors-env.json
 .\start-connectors-console.ps1 -Port 8095
 ```
 
+Ou plus simple: double-clique sur `start-connectors-console.bat`.
+
 Puis ouvre:
 
 ```text
@@ -40,6 +42,9 @@ Dans la page, mets les URLs:
 ```
 
 Le navigateur appelle `localhost`, et le script PowerShell relaie vers les vrais endpoints Kafka Connect.
+
+Important: si tu ouvres `connectors.html` en `file://`, les endpoints DEV/UAT/STA/PROD peuvent etre bloques par CORS.
+Dans ce cas il faut passer par `http://localhost:8095/connectors.html` et configurer les URLs de la page en `/proxy/...`.
 
 ## Actions disponibles
 

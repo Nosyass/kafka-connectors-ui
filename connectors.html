@@ -46,6 +46,11 @@
     Si le navigateur bloque avec CORS, lance <code>start-connectors-console.ps1</code> et utilise
     <code>/proxy/dev</code>, <code>/proxy/uat</code>, <code>/proxy/sta</code> ou <code>/proxy/prod</code>.
   </section>
+  <section id="file-warning" class="notice" hidden>
+    <strong>Page ouverte en file:// :</strong> le navigateur peut bloquer les appels vers DEV/UAT/STA/PROD avec CORS.
+    Lance <code>start-connectors-console.bat</code>, ouvre <code>http://localhost:8095/connectors.html</code>,
+    puis utilise une base URL du type <code>/proxy/uat</code>.
+  </section>
 
   <section id="summary" class="summary"></section>
 
@@ -96,6 +101,11 @@ const model = {
   cluster: null,
   lastError: null
 };
+
+if (location.protocol === 'file:') {
+  const warning = document.getElementById('file-warning');
+  if (warning) warning.hidden = false;
+}
 
 const $ = id => document.getElementById(id);
 const apiName = name => encodeURIComponent(name);
