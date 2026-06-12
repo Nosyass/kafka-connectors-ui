@@ -52,6 +52,47 @@ h3 { font-size: 13px; color: #cbd5e1; margin: 18px 0 8px; }
 .muted { color: var(--muted); }
 #last-update { margin-top: 3px; font-size: 12px; }
 
+.section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 18px 0 8px;
+}
+.section-title h3 {
+  margin: 0;
+}
+.config-tools,
+.segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.segmented {
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #101620;
+}
+.segmented button,
+.copy-button {
+  min-height: 30px;
+  padding: 6px 9px;
+  font-size: 12px;
+}
+.segmented button {
+  color: var(--muted);
+  background: transparent;
+}
+.segmented button.active {
+  color: #062235;
+  background: var(--accent);
+}
+.copy-button::before {
+  content: "⧉";
+  margin-right: 6px;
+}
+
 .table-loader {
   display: inline-flex;
   align-items: center;
@@ -418,6 +459,11 @@ pre {
   color: #fca5a5;
   font-weight: 900;
   letter-spacing: .4px;
+}
+.config-json {
+  max-height: 520px;
+  border: 1px solid var(--line);
+  background: #11161d;
 }
 
 .notice,

@@ -112,7 +112,8 @@ const model = {
   envConfigSource: 'localStorage',
   loading: false,
   requestSeq: 0,
-  activeLoadController: null
+  activeLoadController: null,
+  configViewMode: localStorage.getItem('bpp.kafka.connect.console.configViewMode') || 'list'
 };
 
 if (location.protocol === 'file:') {
@@ -472,6 +473,10 @@ function renderDetail() {
       <code class="config-value ${sensitive(k) ? 'redacted' : ''}">${esc(value)}</code>
     </div>`;
   }).join('');
+  const configJson = JSON.stringify(maskConfig(c.config || {}), null, 2);
+  const configContent = model.configViewMode === 'json'
+    ? `<pre class="config-json">${esc(configJson)}</pre>`
+    : `<div class="config-list">${configRows || '<p class="muted">Aucune config.</p>'}</div>`;
   drawer.innerHTML = `
     <div class="drawer-head">
       <div>
@@ -492,12 +497,58 @@ function renderDetail() {
     </div>
     <h3>Tasks</h3>
     ${tasks || '<p class="muted">Aucune task.</p>'}
-    <h3>Config</h3>
-    <div class="config-list">${configRows || '<p class="muted">Aucune config.</p>'}</div>
+    <div class="section-title">
+      <h3>Config</h3>
+      <div class="config-tools">
+        <div class="segmented">
+          <button class="${model.configViewMode === 'list' ? 'active' : ''}" onclick="setConfigViewMode('list')">Liste</button>
+          <button class="${model.configViewMode === 'json' ? 'active' : ''}" onclick="setConfigViewMode('json')">JSON</button>
+        </div>
+        <button class="secondary copy-button" onclick="copySelectedConfig()" title="Copier la config JSON">Copier</button>
+      </div>
+    </div>
+    ${configContent}
   `;
   drawer.classList.add('open');
   drawer.setAttribute('aria-hidden', 'false');
   backdrop.hidden = false;
+}
+
+function maskConfig(config) {
+  return Object.fromEntries(
+    Object.entries(config || {})
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, value]) => [key, sensitive(key) ? '********' : value])
+  );
+}
+
+function setConfigViewMode(mode) {
+  model.configViewMode = mode === 'json' ? 'json' : 'list';
+  localStorage.setItem('bpp.kafka.connect.console.configViewMode', model.configViewMode);
+  renderDetail();
+}
+
+async function copySelectedConfig() {
+  if (!model.selected) return;
+  const text = JSON.stringify(maskConfig(model.selected.config || {}), null, 2);
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.left = '-9999px';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      textarea.remove();
+    }
+    toast('Config JSON copiee', 'ok');
+  } catch (e) {
+    toast('Copie impossible: ' + (e.message || e), 'error');
+  }
 }
 
 function selectConnector(name) {
