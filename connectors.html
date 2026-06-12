@@ -12,6 +12,7 @@
     <div>
       <h1>Kafka Connect Console</h1>
       <p id="cluster-info" class="muted">Worker non charge.</p>
+      <p id="last-update" class="muted">Derniere mise a jour: jamais</p>
     </div>
     <div class="actions">
       <button id="refresh">Refresh</button>
@@ -73,10 +74,6 @@
         <tbody></tbody>
       </table>
     </div>
-
-    <aside id="detail" class="panel detail">
-      <div class="empty">Selectionne un connecteur.</div>
-    </aside>
   </section>
 
   <p class="footer-note">
@@ -85,6 +82,9 @@
   </p>
 </main>
 
+<div id="toast-root" class="toast-root" aria-live="polite"></div>
+<div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
+<aside id="detail" class="drawer" aria-hidden="true"></aside>
 <input id="file-input" type="file" accept="application/json" hidden />
 
 <script>
@@ -104,7 +104,11 @@ const model = {
   connectors: [],
   selected: null,
   cluster: null,
-  lastError: null
+  lastError: null,
+  lastUpdatedAt: null,
+  loadedOnce: false,
+  stateByName: {},
+  toastSeq: 0
 };
 
 if (location.protocol === 'file:') {
@@ -177,7 +181,10 @@ async function fetchJson(path, options = {}) {
   return body;
 }
 
-async function loadConnectors(selectName) {
+async function loadConnectors(selectName, options = {}) {
+  const notifyLoaded = Boolean(options.notifyLoaded);
+  const notifyChanges = options.notifyChanges !== false;
+  const previousState = model.stateByName || {};
   model.lastError = null;
   try {
     const [cluster, expanded] = await Promise.all([
@@ -187,11 +194,18 @@ async function loadConnectors(selectName) {
     model.cluster = cluster;
     model.connectors = normalizeConnectors(expanded);
     if (selectName) model.selected = model.connectors.find(c => c.name === selectName) || null;
-    if (!model.selected && model.connectors.length) model.selected = model.connectors[0];
+    model.lastUpdatedAt = new Date();
+    notifyStateChanges(previousState, model.connectors, notifyChanges && model.loadedOnce);
+    model.stateByName = Object.fromEntries(model.connectors.map(c => [c.name, stateSignature(c)]));
+    if (!model.loadedOnce || notifyLoaded) {
+      toast(`${model.connectors.length} connectors loaded`, 'ok');
+    }
+    model.loadedOnce = true;
   } catch (e) {
     model.lastError = e.message || String(e);
     model.connectors = [];
     model.selected = null;
+    toast(model.lastError, 'error');
   }
   render();
 }
@@ -241,6 +255,30 @@ function stateClass(value) {
   return String(value || 'UNKNOWN').toUpperCase();
 }
 
+function stateSignature(c) {
+  const tasks = (c.tasks || []).map(t => `${t.id}:${stateClass(t.state)}`).sort().join('|');
+  return {
+    connectorState: stateClass(c.connectorState),
+    tasks
+  };
+}
+
+function notifyStateChanges(previous, connectors, enabled) {
+  if (!enabled) return;
+  connectors.forEach(c => {
+    const before = previous[c.name];
+    const after = stateSignature(c);
+    if (!before) return;
+    if (before.connectorState !== after.connectorState) {
+      toast(`${c.name}: ${before.connectorState} -> ${after.connectorState}`, after.connectorState === 'FAILED' ? 'error' : 'warn');
+      return;
+    }
+    if (before.tasks !== after.tasks) {
+      toast(`${c.name}: task status changed`, 'warn');
+    }
+  });
+}
+
 function filteredConnectors() {
   const term = $('search').value.trim().toLowerCase();
   const state = $('state-filter').value;
@@ -280,6 +318,9 @@ function renderHeader() {
       ? `Erreur: ${model.lastError}`
       : `Env ${model.env.toUpperCase()} - ${route}`;
   $('cluster-info').textContent = text;
+  $('last-update').textContent = model.lastUpdatedAt
+    ? `Derniere mise a jour: ${model.lastUpdatedAt.toLocaleString()}`
+    : 'Derniere mise a jour: jamais';
 }
 
 function renderSummary() {
@@ -316,8 +357,13 @@ function renderTable() {
 
 function renderDetail() {
   const c = model.selected;
+  const drawer = $('detail');
+  const backdrop = $('drawer-backdrop');
   if (!c) {
-    $('detail').innerHTML = `<div class="${model.lastError ? 'error' : 'empty'}">${esc(model.lastError || 'Selectionne un connecteur.')}</div>`;
+    drawer.classList.remove('open');
+    drawer.setAttribute('aria-hidden', 'true');
+    backdrop.hidden = true;
+    drawer.innerHTML = '';
     return;
   }
   const tasks = (c.tasks || []).map(t => `<div class="task-card">
@@ -332,13 +378,16 @@ function renderDetail() {
     const value = sensitive(k) ? '********' : v;
     return `<tr><td><code>${esc(k)}</code></td><td class="${sensitive(k) ? 'redacted' : ''}">${esc(value)}</td></tr>`;
   }).join('');
-  $('detail').innerHTML = `
-    <div class="detail-head">
+  drawer.innerHTML = `
+    <div class="drawer-head">
       <div>
         <h2>${esc(c.name)}</h2>
         <p class="muted">${esc(connectorClass(c))}</p>
       </div>
-      <span class="state ${stateClass(c.connectorState)}">${esc(c.connectorState)}</span>
+      <div class="drawer-head-actions">
+        <span class="state ${stateClass(c.connectorState)}">${esc(c.connectorState)}</span>
+        <button class="drawer-close secondary" onclick="closeDetail()" title="Fermer">X</button>
+      </div>
     </div>
     <div class="actions">
       <button onclick="connectorAction('${escAttr(c.name)}','restart')">Restart</button>
@@ -352,11 +401,20 @@ function renderDetail() {
     <h3>Config</h3>
     <div class="config-table-wrap"><table class="config-table"><tbody>${configRows}</tbody></table></div>
   `;
+  drawer.classList.add('open');
+  drawer.setAttribute('aria-hidden', 'false');
+  backdrop.hidden = false;
 }
 
 function selectConnector(name) {
   model.selected = model.connectors.find(c => c.name === name) || null;
   render();
+}
+
+function closeDetail() {
+  model.selected = null;
+  renderTable();
+  renderDetail();
 }
 
 function setStateFilter(value) {
@@ -373,21 +431,61 @@ async function connectorAction(name, action) {
     resume: ['PUT', `${base}/resume`]
   };
   const [method, url] = calls[action];
-  await fetchJson(url, { method });
-  setTimeout(() => loadConnectors(name), 700);
+  try {
+    await fetchJson(url, { method });
+    toast(`${actionLabel(action)}: ${name}`, 'ok');
+    setTimeout(() => loadConnectors(name), 700);
+  } catch (e) {
+    toast(e.message || String(e), 'error');
+  }
 }
 
 async function restartTask(name, id) {
-  await fetchJson(`/connectors/${apiName(name)}/tasks/${id}/restart`, { method: 'POST' });
-  setTimeout(() => loadConnectors(name), 700);
+  try {
+    await fetchJson(`/connectors/${apiName(name)}/tasks/${id}/restart`, { method: 'POST' });
+    toast(`Restart task ${id}: ${name}`, 'ok');
+    setTimeout(() => loadConnectors(name), 700);
+  } catch (e) {
+    toast(e.message || String(e), 'error');
+  }
 }
 
 async function deleteConnector(name) {
+  if (!confirm(`Confirmer la suppression du connecteur ?\n\n${name}`)) return;
   const typed = prompt(`Tape le nom exact pour supprimer le connecteur:\n${name}`);
   if (typed !== name) return;
-  await fetchJson(`/connectors/${apiName(name)}`, { method: 'DELETE' });
-  model.selected = null;
-  setTimeout(() => loadConnectors(), 700);
+  try {
+    await fetchJson(`/connectors/${apiName(name)}`, { method: 'DELETE' });
+    toast(`Delete: ${name}`, 'warn');
+    model.selected = null;
+    setTimeout(() => loadConnectors(null, { notifyLoaded: true }), 700);
+  } catch (e) {
+    toast(e.message || String(e), 'error');
+  }
+}
+
+function actionLabel(action) {
+  return ({
+    restart: 'Restart requested',
+    restartFailed: 'Restart failed tasks requested',
+    pause: 'Pause requested',
+    resume: 'Resume requested'
+  })[action] || action;
+}
+
+function toast(message, type = 'info') {
+  const root = $('toast-root');
+  if (!root) return;
+  const id = ++model.toastSeq;
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.dataset.id = String(id);
+  el.innerHTML = `<button type="button" title="Fermer">X</button><span>${esc(message)}</span>`;
+  el.querySelector('button').addEventListener('click', () => el.remove());
+  root.prepend(el);
+  window.setTimeout(() => {
+    if (el.isConnected) el.remove();
+  }, type === 'error' ? 9000 : 5500);
 }
 
 function exportConfig() {
@@ -427,14 +525,16 @@ $('env-select').addEventListener('change', e => {
   model.env = e.target.value;
   localStorage.setItem('bpp.kafka.connect.console.selectedEnv', model.env);
   model.selected = null;
+  model.loadedOnce = false;
   render();
-  loadConnectors();
+  loadConnectors(null, { notifyLoaded: true });
 });
 $('mode-select').addEventListener('change', e => {
   model.mode = e.target.value;
   localStorage.setItem('bpp.kafka.connect.console.mode', model.mode);
+  model.loadedOnce = false;
   render();
-  loadConnectors(model.selected && model.selected.name);
+  loadConnectors(model.selected && model.selected.name, { notifyLoaded: true });
 });
 $('save-env').addEventListener('click', () => {
   model.envs[model.env] = { ...(model.envs[model.env] || {}), url: $('base-url').value.trim() };
@@ -443,9 +543,11 @@ $('save-env').addEventListener('click', () => {
   localStorage.setItem('bpp.kafka.connect.console.mode', model.mode);
   localStorage.setItem('bpp.kafka.connect.console.authHeader', model.authHeader);
   saveEnvs();
-  loadConnectors(model.selected && model.selected.name);
+  toast(`Configuration saved for ${model.env.toUpperCase()}`, 'ok');
+  model.loadedOnce = false;
+  loadConnectors(model.selected && model.selected.name, { notifyLoaded: true });
 });
-$('refresh').addEventListener('click', () => loadConnectors(model.selected && model.selected.name));
+$('refresh').addEventListener('click', () => loadConnectors(model.selected && model.selected.name, { notifyLoaded: true }));
 $('search').addEventListener('input', renderTable);
 $('state-filter').addEventListener('change', renderTable);
 $('export-config').addEventListener('click', exportConfig);
@@ -453,8 +555,12 @@ $('import-config').addEventListener('click', () => $('file-input').click());
 $('file-input').addEventListener('change', e => e.target.files[0] && importConfig(e.target.files[0]));
 
 render();
-loadConnectors();
-setInterval(() => loadConnectors(model.selected && model.selected.name), 15000);
+loadConnectors(null, { notifyLoaded: true });
+setInterval(() => loadConnectors(model.selected && model.selected.name, { notifyChanges: true }), 15000);
+$('drawer-backdrop').addEventListener('click', closeDetail);
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeDetail();
+});
 </script>
 </body>
 </html>
