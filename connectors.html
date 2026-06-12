@@ -15,10 +15,6 @@
       <p id="last-update" class="muted">Derniere mise a jour: jamais</p>
     </div>
     <div class="actions">
-      <div id="load-indicator" class="load-indicator" hidden>
-        <span class="spinner"></span>
-        <span>Chargement</span>
-      </div>
       <button id="refresh">Refresh</button>
       <button class="secondary" id="export-config">Export env</button>
       <button class="secondary" id="import-config">Import env</button>
@@ -390,7 +386,6 @@ function renderHeader() {
   $('mode-select').value = model.mode;
   $('base-url').value = currentEnv().url || '';
   $('auth-header').value = model.authHeader;
-  $('load-indicator').hidden = !model.loading;
   $('refresh').disabled = model.loading;
   const c = model.cluster || {};
   const route = model.mode === 'proxy'
