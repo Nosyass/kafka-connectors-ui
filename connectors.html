@@ -426,6 +426,7 @@ function setStateFilter(value) {
 }
 
 async function connectorAction(name, action) {
+  if (!confirmConnectorAction(name, action)) return;
   const base = `/connectors/${apiName(name)}`;
   const calls = {
     restart: ['POST', `${base}/restart?includeTasks=true&onlyFailed=false`],
@@ -444,6 +445,7 @@ async function connectorAction(name, action) {
 }
 
 async function restartTask(name, id) {
+  if (!confirm(`Confirmer le redemarrage de la task ${id} ?\n\nConnecteur:\n${name}`)) return;
   try {
     await fetchJson(`/connectors/${apiName(name)}/tasks/${id}/restart`, { method: 'POST' });
     toast(`Restart task ${id}: ${name}`, 'ok');
@@ -454,7 +456,7 @@ async function restartTask(name, id) {
 }
 
 async function deleteConnector(name) {
-  if (!confirm(`Confirmer la suppression du connecteur ?\n\n${name}`)) return;
+  if (!confirmConnectorAction(name, 'delete')) return;
   const typed = prompt(`Tape le nom exact pour supprimer le connecteur:\n${name}`);
   if (typed !== name) return;
   try {
@@ -465,6 +467,24 @@ async function deleteConnector(name) {
   } catch (e) {
     toast(e.message || String(e), 'error');
   }
+}
+
+function confirmConnectorAction(name, action) {
+  const labels = {
+    restart: 'redemarrer le connecteur',
+    restartFailed: 'redemarrer uniquement les tasks en erreur',
+    pause: 'mettre le connecteur en pause',
+    resume: 'reprendre le connecteur',
+    delete: 'supprimer definitivement le connecteur'
+  };
+  const warnings = {
+    restart: 'Cela peut relancer la consommation selon les offsets commites.',
+    restartFailed: 'Seules les tasks en erreur seront ciblees.',
+    pause: 'Le connecteur arretera de consommer tant qu il reste en pause.',
+    resume: 'Le connecteur recommencera a consommer.',
+    delete: 'Action destructive. La configuration sera supprimee de Kafka Connect.'
+  };
+  return confirm(`Confirmer l action: ${labels[action] || action} ?\n\nConnecteur:\n${name}\n\n${warnings[action] || ''}`);
 }
 
 function actionLabel(action) {
