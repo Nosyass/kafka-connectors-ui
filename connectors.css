@@ -320,13 +320,41 @@ pre {
   font: 12px/1.45 Consolas, "Courier New", monospace;
 }
 
-.config-table-wrap {
-  max-height: 500px;
+.config-list {
+  display: grid;
+  max-height: 520px;
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: 7px;
+  background: #11161d;
 }
-.config-table td:first-child { width: 42%; }
+.config-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 34%) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.config-row:last-child {
+  border-bottom: 0;
+}
+.config-key,
+.config-value {
+  display: block;
+  min-width: 0;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.config-key {
+  color: #bae6fd;
+  font-weight: 800;
+}
+.config-value {
+  color: #e5e7eb;
+}
 .redacted {
   color: #fca5a5;
   font-weight: 900;
@@ -406,6 +434,7 @@ pre {
   header { position: static; }
   .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .drawer { width: 100vw; }
+  .config-row { grid-template-columns: 1fr; }
   #search,
   #base-url,
   #mode-select,

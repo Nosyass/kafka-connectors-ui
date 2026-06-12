@@ -376,7 +376,10 @@ function renderDetail() {
   </div>`).join('');
   const configRows = Object.entries(c.config || {}).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => {
     const value = sensitive(k) ? '********' : v;
-    return `<tr><td><code>${esc(k)}</code></td><td class="${sensitive(k) ? 'redacted' : ''}">${esc(value)}</td></tr>`;
+    return `<div class="config-row">
+      <code class="config-key">${esc(k)}</code>
+      <code class="config-value ${sensitive(k) ? 'redacted' : ''}">${esc(value)}</code>
+    </div>`;
   }).join('');
   drawer.innerHTML = `
     <div class="drawer-head">
@@ -399,7 +402,7 @@ function renderDetail() {
     <h3>Tasks</h3>
     ${tasks || '<p class="muted">Aucune task.</p>'}
     <h3>Config</h3>
-    <div class="config-table-wrap"><table class="config-table"><tbody>${configRows}</tbody></table></div>
+    <div class="config-list">${configRows || '<p class="muted">Aucune config.</p>'}</div>
   `;
   drawer.classList.add('open');
   drawer.setAttribute('aria-hidden', 'false');
