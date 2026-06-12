@@ -148,13 +148,25 @@ main {
 .table-wrap {
   overflow: auto;
   min-height: 620px;
+  max-width: 100%;
 }
 
 table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: 12px;
 }
+#connectors-table th:nth-child(1),
+#connectors-table td:nth-child(1) { width: 26%; }
+#connectors-table th:nth-child(2),
+#connectors-table td:nth-child(2) { width: 46%; }
+#connectors-table th:nth-child(3),
+#connectors-table td:nth-child(3) { width: 92px; }
+#connectors-table th:nth-child(4),
+#connectors-table td:nth-child(4) { width: 110px; }
+#connectors-table th:nth-child(5),
+#connectors-table td:nth-child(5) { width: 108px; }
 th,
 td {
   padding: 8px 10px;
@@ -290,10 +302,12 @@ code {
   gap: 6px;
   align-content: start;
   justify-items: start;
-  min-width: 92px;
+  min-width: 0;
+  width: 108px;
+  overflow: hidden;
 }
 .row-actions button {
-  width: 84px;
+  width: 82px;
   margin: 0;
 }
 
