@@ -32,19 +32,16 @@ Puis ouvre:
 http://localhost:8095/connectors.html
 ```
 
-Dans la page, mets les URLs:
+Dans la page:
 
-```text
-/proxy/dev
-/proxy/uat
-/proxy/sta
-/proxy/prod
-```
+- selectionne l'environnement
+- selectionne `Proxy transparent`
+- laisse l'URL reelle visible dans le champ base URL si tu veux, mais les appels partiront automatiquement via `/proxy/<env>`
 
 Le navigateur appelle `localhost`, et le script PowerShell relaie vers les vrais endpoints Kafka Connect.
 
 Important: si tu ouvres `connectors.html` en `file://`, les endpoints DEV/UAT/STA/PROD peuvent etre bloques par CORS.
-Dans ce cas il faut passer par `http://localhost:8095/connectors.html` et configurer les URLs de la page en `/proxy/...`.
+Dans ce cas il faut passer par `http://localhost:8095/connectors.html` et utiliser le mode `Proxy transparent`.
 
 ## Actions disponibles
 

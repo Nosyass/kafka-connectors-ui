@@ -93,6 +93,7 @@ textarea:focus {
 }
 
 #env-select { min-width: 120px; }
+#mode-select { min-width: 180px; }
 #base-url { min-width: min(720px, 100%); flex: 1; }
 #search { min-width: 300px; flex: 1; }
 #auth-header { min-width: min(680px, 100%); flex: 1; }
@@ -181,6 +182,29 @@ td small { color: var(--muted); margin-top: 4px; }
 code {
   color: #a5f3fc;
   white-space: normal;
+}
+
+.topic-list {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.topic-list li {
+  position: relative;
+  padding-left: 14px;
+  line-height: 1.35;
+}
+.topic-list li::before {
+  content: "-";
+  position: absolute;
+  left: 0;
+  color: var(--muted);
+}
+.topic-list code {
+  display: inline;
+  overflow-wrap: anywhere;
 }
 
 .state,
@@ -300,6 +324,7 @@ pre {
   }
   #search,
   #base-url,
+  #mode-select,
   #auth-header {
     min-width: 100%;
   }
