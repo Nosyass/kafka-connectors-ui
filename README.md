@@ -32,11 +32,13 @@ Puis ouvre:
 http://localhost:8095/connectors.html
 ```
 
+La page charge automatiquement `connectors-env.json` au demarrage quand elle est servie par le launcher local.
+
 Dans la page:
 
 - selectionne l'environnement
 - selectionne `Proxy transparent`
-- laisse l'URL reelle visible dans le champ base URL si tu veux, mais les appels partiront automatiquement via `/proxy/<env>`
+- l'URL reelle du fichier est affichee dans le champ base URL, mais les appels partiront automatiquement via `/proxy/<env>`
 
 Le navigateur appelle `localhost`, et le script PowerShell relaie vers les vrais endpoints Kafka Connect.
 

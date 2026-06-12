@@ -108,7 +108,8 @@ const model = {
   lastUpdatedAt: null,
   loadedOnce: false,
   stateByName: {},
-  toastSeq: 0
+  toastSeq: 0,
+  envConfigSource: 'localStorage'
 };
 
 if (location.protocol === 'file:') {
@@ -130,6 +131,33 @@ function loadEnvs() {
 
 function saveEnvs() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(model.envs, null, 2));
+}
+
+function normalizeEnvConfig(config) {
+  const normalized = {};
+  Object.entries(config || {}).forEach(([key, value]) => {
+    if (!value || typeof value !== 'object') return;
+    normalized[key] = {
+      label: value.label || key.toUpperCase(),
+      url: value.url || ''
+    };
+  });
+  return normalized;
+}
+
+async function loadEnvConfigFile() {
+  if (location.protocol === 'file:') return;
+  try {
+    const res = await fetch(`connectors-env.json?ts=${Date.now()}`, { cache: 'no-store' });
+    if (!res.ok) return;
+    const fileEnvs = normalizeEnvConfig(await res.json());
+    if (!Object.keys(fileEnvs).length) return;
+    model.envs = { ...DEFAULT_ENVS, ...model.envs, ...fileEnvs };
+    model.envConfigSource = 'connectors-env.json';
+    toast('connectors-env.json loaded', 'ok');
+  } catch {
+    // Optional file. Keep localStorage/default config when it is absent.
+  }
 }
 
 function currentEnv() {
@@ -312,11 +340,12 @@ function renderHeader() {
   const route = model.mode === 'proxy'
     ? `proxy transparent /proxy/${model.env} -> ${currentBaseUrl() || 'URL du fichier connectors-env.json'}`
     : `direct -> ${currentBaseUrl() || 'URL vide'}`;
+  const source = model.envConfigSource === 'connectors-env.json' ? 'config connectors-env.json' : 'config locale';
   const text = c.version
-    ? `Kafka Connect ${c.version} - ${c.kafka_cluster_id || 'cluster ?'} - ${route}`
+    ? `Kafka Connect ${c.version} - ${c.kafka_cluster_id || 'cluster ?'} - ${route} - ${source}`
     : model.lastError
       ? `Erreur: ${model.lastError}`
-      : `Env ${model.env.toUpperCase()} - ${route}`;
+      : `Env ${model.env.toUpperCase()} - ${route} - ${source}`;
   $('cluster-info').textContent = text;
   $('last-update').textContent = model.lastUpdatedAt
     ? `Derniere mise a jour: ${model.lastUpdatedAt.toLocaleString()}`
@@ -577,13 +606,20 @@ $('export-config').addEventListener('click', exportConfig);
 $('import-config').addEventListener('click', () => $('file-input').click());
 $('file-input').addEventListener('change', e => e.target.files[0] && importConfig(e.target.files[0]));
 
-render();
-loadConnectors(null, { notifyLoaded: true });
-setInterval(() => loadConnectors(model.selected && model.selected.name, { notifyChanges: true }), 15000);
 $('drawer-backdrop').addEventListener('click', closeDetail);
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeDetail();
 });
+
+async function boot() {
+  render();
+  await loadEnvConfigFile();
+  render();
+  await loadConnectors(null, { notifyLoaded: true });
+  setInterval(() => loadConnectors(model.selected && model.selected.name, { notifyChanges: true }), 15000);
+}
+
+boot();
 </script>
 </body>
 </html>
