@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kafka Connect Console</title>
+  <link rel="stylesheet" href="connectors.css" />
+</head>
+<body>
+<header>
+  <div class="title-row">
+    <div>
+      <h1>Kafka Connect Console</h1>
+      <p id="cluster-info" class="muted">Worker non charge.</p>
+    </div>
+    <div class="actions">
+      <button id="refresh">Refresh</button>
+      <button class="secondary" id="export-config">Export env</button>
+      <button class="secondary" id="import-config">Import env</button>
+    </div>
+  </div>
+
+  <div class="env-row">
+    <select id="env-select" title="Environnement"></select>
+    <input id="base-url" placeholder="Kafka Connect base URL, ex: http://localhost:8083 ou /proxy/dev" />
+    <button class="ok" id="save-env">Save</button>
+  </div>
+
+  <div class="toolbar">
+    <input id="search" placeholder="Filtrer par nom, topic, classe..." />
+    <select id="state-filter">
+      <option value="">Tous les etats</option>
+      <option value="RUNNING">RUNNING</option>
+      <option value="PAUSED">PAUSED</option>
+      <option value="FAILED">FAILED</option>
+      <option value="UNASSIGNED">UNASSIGNED</option>
+      <option value="RESTARTING">RESTARTING</option>
+    </select>
+    <input id="auth-header" placeholder="Header optionnel, ex: Authorization: Bearer xxx" />
+  </div>
+</header>
+
+<main>
+  <section class="notice">
+    <strong>Mode direct :</strong> mets l'URL Kafka Connect dans le champ base URL.
+    Si le navigateur bloque avec CORS, lance <code>start-connectors-console.ps1</code> et utilise
+    <code>/proxy/dev</code>, <code>/proxy/uat</code>, <code>/proxy/sta</code> ou <code>/proxy/prod</code>.
+  </section>
+
+  <section id="summary" class="summary"></section>
+
+  <section class="layout">
+    <div class="panel table-wrap">
+      <table id="connectors-table">
+        <thead>
+        <tr>
+          <th>Nom</th>
+          <th>Topics</th>
+          <th>Etat</th>
+          <th>Tasks</th>
+          <th>Actions</th>
+        </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <aside id="detail" class="panel detail">
+      <div class="empty">Selectionne un connecteur.</div>
+    </aside>
+  </section>
+
+  <p class="footer-note">
+    Les valeurs contenant secret/password/token/authorization sont masquees a l'affichage.
+    Les actions pause/resume/restart/delete appellent directement l'API Kafka Connect de l'environnement selectionne.
+  </p>
+</main>
+
+<input id="file-input" type="file" accept="application/json" hidden />
+
+<script>
+const STORAGE_KEY = 'bpp.kafka.connect.console.envs.v1';
+const DEFAULT_ENVS = {
+  dev:  { label: 'DEV',  url: 'http://localhost:8083' },
+  uat:  { label: 'UAT',  url: '' },
+  sta:  { label: 'STA',  url: '' },
+  prod: { label: 'PROD', url: '' }
+};
+
+const model = {
+  envs: loadEnvs(),
+  env: localStorage.getItem('bpp.kafka.connect.console.selectedEnv') || 'dev',
+  authHeader: localStorage.getItem('bpp.kafka.connect.console.authHeader') || '',
+  connectors: [],
+  selected: null,
+  cluster: null,
+  lastError: null
+};
+
+const $ = id => document.getElementById(id);
+const apiName = name => encodeURIComponent(name);
+const sensitive = key => /secret|password|token|authorization|credential/i.test(key || '');
+
+function loadEnvs() {
+  try {
+    return { ...DEFAULT_ENVS, ...JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') };
+  } catch {
+    return { ...DEFAULT_ENVS };
+  }
+}
+
+function saveEnvs() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(model.envs, null, 2));
+}
+
+function currentEnv() {
+  if (!model.envs[model.env]) {
+    model.env = Object.keys(model.envs)[0] || 'dev';
+  }
+  return model.envs[model.env];
+}
+
+function currentBaseUrl() {
+  return String(currentEnv().url || '').replace(/\/+$/, '');
+}
+
+function buildUrl(path) {
+  const base = currentBaseUrl();
+  if (!base) throw new Error('Base URL vide pour ' + model.env);
+  const cleanPath = path.startsWith('/') ? path : '/' + path;
+  return base + cleanPath;
+}
+
+function buildHeaders() {
+  const headers = { 'Accept': 'application/json' };
+  const raw = $('auth-header').value.trim();
+  if (!raw) return headers;
+  const idx = raw.indexOf(':');
+  if (idx > 0) {
+    headers[raw.slice(0, idx).trim()] = raw.slice(idx + 1).trim();
+  }
+  return headers;
+}
+
+async function fetchJson(path, options = {}) {
+  const method = options.method || 'GET';
+  const headers = { ...buildHeaders(), ...(options.headers || {}) };
+  if (options.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+  const res = await fetch(buildUrl(path), { ...options, method, headers });
+  const text = await res.text();
+  let body = text;
+  try { body = text ? JSON.parse(text) : {}; } catch {}
+  if (!res.ok) {
+    const msg = body && typeof body === 'object'
+      ? (body.message || body.error || JSON.stringify(body))
+      : (body || res.statusText);
+    throw new Error(method + ' ' + path + ' -> HTTP ' + res.status + ' ' + msg);
+  }
+  return body;
+}
+
+async function loadConnectors(selectName) {
+  model.lastError = null;
+  try {
+    const [cluster, expanded] = await Promise.all([
+      fetchJson('/').catch(e => ({ error: e.message })),
+      fetchJson('/connectors?expand=status&expand=info')
+    ]);
+    model.cluster = cluster;
+    model.connectors = normalizeConnectors(expanded);
+    if (selectName) model.selected = model.connectors.find(c => c.name === selectName) || null;
+    if (!model.selected && model.connectors.length) model.selected = model.connectors[0];
+  } catch (e) {
+    model.lastError = e.message || String(e);
+    model.connectors = [];
+    model.selected = null;
+  }
+  render();
+}
+
+function normalizeConnectors(expanded) {
+  if (Array.isArray(expanded)) {
+    return expanded.map(name => ({ name, connectorState: 'UNKNOWN', tasks: [], config: {} }));
+  }
+  return Object.entries(expanded || {}).map(([name, payload]) => {
+    const status = payload.status || {};
+    const info = payload.info || {};
+    return {
+      name,
+      type: info.type || '',
+      connectorState: status.connector && status.connector.state || 'UNKNOWN',
+      workerId: status.connector && status.connector.worker_id || '',
+      tasks: (status.tasks || []).map(t => ({
+        id: t.id,
+        state: t.state || 'UNKNOWN',
+        workerId: t.worker_id || '',
+        trace: t.trace || ''
+      })),
+      config: info.config || {}
+    };
+  }).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function connectorTopics(c) {
+  return c.config?.topics || c.config?.['topics.regex'] || '';
+}
+
+function connectorClass(c) {
+  return c.config?.['connector.class'] || '';
+}
+
+function stateClass(value) {
+  return String(value || 'UNKNOWN').toUpperCase();
+}
+
+function filteredConnectors() {
+  const term = $('search').value.trim().toLowerCase();
+  const state = $('state-filter').value;
+  return model.connectors.filter(c => {
+    const hay = [c.name, c.connectorState, connectorTopics(c), connectorClass(c)].join(' ').toLowerCase();
+    return (!state || stateClass(c.connectorState) === state) && (!term || hay.includes(term));
+  });
+}
+
+function render() {
+  renderHeader();
+  renderSummary();
+  renderTable();
+  renderDetail();
+}
+
+function renderEnvSelect() {
+  const select = $('env-select');
+  select.innerHTML = Object.entries(model.envs).map(([key, cfg]) =>
+    `<option value="${escAttr(key)}">${esc(cfg.label || key.toUpperCase())}</option>`
+  ).join('');
+  select.value = model.env;
+}
+
+function renderHeader() {
+  renderEnvSelect();
+  $('base-url').value = currentEnv().url || '';
+  $('auth-header').value = model.authHeader;
+  const c = model.cluster || {};
+  const text = c.version
+    ? `Kafka Connect ${c.version} - ${c.kafka_cluster_id || 'cluster ?'} - ${currentBaseUrl()}`
+    : model.lastError
+      ? `Erreur: ${model.lastError}`
+      : `Env ${model.env.toUpperCase()} - ${currentBaseUrl() || 'URL vide'}`;
+  $('cluster-info').textContent = text;
+}
+
+function renderSummary() {
+  const counts = model.connectors.reduce((acc, c) => {
+    const state = stateClass(c.connectorState);
+    acc[state] = (acc[state] || 0) + 1;
+    return acc;
+  }, {});
+  const states = ['RUNNING', 'PAUSED', 'FAILED', 'UNASSIGNED', 'RESTARTING'];
+  $('summary').innerHTML = states.map(s =>
+    `<button class="metric ${s}" onclick="setStateFilter('${s}')"><span>${s}</span><b>${counts[s] || 0}</b></button>`
+  ).join('') + `<button class="metric" onclick="setStateFilter('')"><span>TOTAL</span><b>${model.connectors.length}</b></button>`;
+}
+
+function renderTable() {
+  const rows = filteredConnectors().map(c => {
+    const tasks = (c.tasks || []).map(t => `<span class="task ${stateClass(t.state)}">${esc(t.id)}:${esc(t.state)}</span>`).join('');
+    const selected = model.selected && model.selected.name === c.name ? ' selected' : '';
+    return `<tr class="${selected}" onclick="selectConnector('${escAttr(c.name)}')">
+      <td><b>${esc(c.name)}</b><small>${esc(connectorClass(c))}</small></td>
+      <td><code>${esc(connectorTopics(c))}</code></td>
+      <td><span class="state ${stateClass(c.connectorState)}">${esc(c.connectorState)}</span></td>
+      <td>${tasks || '<span class="muted">aucune</span>'}</td>
+      <td class="row-actions" onclick="event.stopPropagation()">
+        <button onclick="connectorAction('${escAttr(c.name)}','restart')">Restart</button>
+        <button class="secondary" onclick="connectorAction('${escAttr(c.name)}','pause')">Pause</button>
+        <button class="ok" onclick="connectorAction('${escAttr(c.name)}','resume')">Resume</button>
+      </td>
+    </tr>`;
+  }).join('');
+  document.querySelector('#connectors-table tbody').innerHTML =
+    rows || `<tr><td colspan="5" class="${model.lastError ? 'error' : 'muted'}">${esc(model.lastError || 'Aucun connecteur.')}</td></tr>`;
+}
+
+function renderDetail() {
+  const c = model.selected;
+  if (!c) {
+    $('detail').innerHTML = `<div class="${model.lastError ? 'error' : 'empty'}">${esc(model.lastError || 'Selectionne un connecteur.')}</div>`;
+    return;
+  }
+  const tasks = (c.tasks || []).map(t => `<div class="task-card">
+    <div class="task-line">
+      <div><b>Task ${esc(t.id)}</b> <span class="task ${stateClass(t.state)}">${esc(t.state)}</span></div>
+      <button class="secondary" onclick="restartTask('${escAttr(c.name)}', ${Number(t.id)})">Restart task</button>
+    </div>
+    <small class="muted">${esc(t.workerId || '')}</small>
+    ${t.trace ? `<pre>${esc(t.trace)}</pre>` : ''}
+  </div>`).join('');
+  const configRows = Object.entries(c.config || {}).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => {
+    const value = sensitive(k) ? '********' : v;
+    return `<tr><td><code>${esc(k)}</code></td><td class="${sensitive(k) ? 'redacted' : ''}">${esc(value)}</td></tr>`;
+  }).join('');
+  $('detail').innerHTML = `
+    <div class="detail-head">
+      <div>
+        <h2>${esc(c.name)}</h2>
+        <p class="muted">${esc(connectorClass(c))}</p>
+      </div>
+      <span class="state ${stateClass(c.connectorState)}">${esc(c.connectorState)}</span>
+    </div>
+    <div class="actions">
+      <button onclick="connectorAction('${escAttr(c.name)}','restart')">Restart</button>
+      <button class="warn" onclick="connectorAction('${escAttr(c.name)}','restartFailed')">Restart failed</button>
+      <button class="secondary" onclick="connectorAction('${escAttr(c.name)}','pause')">Pause</button>
+      <button class="ok" onclick="connectorAction('${escAttr(c.name)}','resume')">Resume</button>
+      <button class="danger" onclick="deleteConnector('${escAttr(c.name)}')">Delete</button>
+    </div>
+    <h3>Tasks</h3>
+    ${tasks || '<p class="muted">Aucune task.</p>'}
+    <h3>Config</h3>
+    <div class="config-table-wrap"><table class="config-table"><tbody>${configRows}</tbody></table></div>
+  `;
+}
+
+function selectConnector(name) {
+  model.selected = model.connectors.find(c => c.name === name) || null;
+  render();
+}
+
+function setStateFilter(value) {
+  $('state-filter').value = value;
+  renderTable();
+}
+
+async function connectorAction(name, action) {
+  const base = `/connectors/${apiName(name)}`;
+  const calls = {
+    restart: ['POST', `${base}/restart?includeTasks=true&onlyFailed=false`],
+    restartFailed: ['POST', `${base}/restart?includeTasks=true&onlyFailed=true`],
+    pause: ['PUT', `${base}/pause`],
+    resume: ['PUT', `${base}/resume`]
+  };
+  const [method, url] = calls[action];
+  await fetchJson(url, { method });
+  setTimeout(() => loadConnectors(name), 700);
+}
+
+async function restartTask(name, id) {
+  await fetchJson(`/connectors/${apiName(name)}/tasks/${id}/restart`, { method: 'POST' });
+  setTimeout(() => loadConnectors(name), 700);
+}
+
+async function deleteConnector(name) {
+  const typed = prompt(`Tape le nom exact pour supprimer le connecteur:\n${name}`);
+  if (typed !== name) return;
+  await fetchJson(`/connectors/${apiName(name)}`, { method: 'DELETE' });
+  model.selected = null;
+  setTimeout(() => loadConnectors(), 700);
+}
+
+function exportConfig() {
+  const blob = new Blob([JSON.stringify(model.envs, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'connectors-env.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importConfig(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      model.envs = { ...DEFAULT_ENVS, ...JSON.parse(reader.result) };
+      saveEnvs();
+      render();
+      loadConnectors();
+    } catch (e) {
+      alert('Import impossible: ' + e.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function esc(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+
+function escAttr(value) {
+  return esc(value).replace(/`/g, '&#96;');
+}
+
+$('env-select').addEventListener('change', e => {
+  model.env = e.target.value;
+  localStorage.setItem('bpp.kafka.connect.console.selectedEnv', model.env);
+  model.selected = null;
+  render();
+  loadConnectors();
+});
+$('save-env').addEventListener('click', () => {
+  model.envs[model.env] = { ...(model.envs[model.env] || {}), url: $('base-url').value.trim() };
+  model.authHeader = $('auth-header').value.trim();
+  localStorage.setItem('bpp.kafka.connect.console.authHeader', model.authHeader);
+  saveEnvs();
+  loadConnectors(model.selected && model.selected.name);
+});
+$('refresh').addEventListener('click', () => loadConnectors(model.selected && model.selected.name));
+$('search').addEventListener('input', renderTable);
+$('state-filter').addEventListener('change', renderTable);
+$('export-config').addEventListener('click', exportConfig);
+$('import-config').addEventListener('click', () => $('file-input').click());
+$('file-input').addEventListener('change', e => e.target.files[0] && importConfig(e.target.files[0]));
+
+render();
+loadConnectors();
+setInterval(() => loadConnectors(model.selected && model.selected.name), 15000);
+</script>
+</body>
+</html>

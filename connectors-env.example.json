@@ -1,0 +1,18 @@
+{
+  "dev": {
+    "label": "DEV",
+    "url": "http://localhost:8083"
+  },
+  "uat": {
+    "label": "UAT",
+    "url": "https://kafka-connect-uat.example.internal"
+  },
+  "sta": {
+    "label": "STA",
+    "url": "https://kafka-connect-sta.example.internal"
+  },
+  "prod": {
+    "label": "PROD",
+    "url": "https://kafka-connect-prod.example.internal"
+  }
+}

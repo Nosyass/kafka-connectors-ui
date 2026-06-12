@@ -1,0 +1,4 @@
+connectors-env.json
+*.log
+.DS_Store
+Thumbs.db
