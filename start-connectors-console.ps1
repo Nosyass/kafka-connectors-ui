@@ -101,7 +101,7 @@ $listener.Prefixes.Add($prefix)
 $listener.Start()
 
 Write-Host ("Kafka Connect Console: {0}connectors.html" -f $prefix)
-Write-Host ("Proxy pattern: {0}proxy/{dev|uat|sta|prod}/connectors" -f $prefix)
+Write-Host ("Proxy pattern: " + $prefix + "proxy/{dev|uat|sta|prod}/connectors")
 Write-Host "Press Ctrl+C to stop."
 
 while ($listener.IsListening) {
