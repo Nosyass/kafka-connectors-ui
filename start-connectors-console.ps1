@@ -1,6 +1,7 @@
 param(
   [int] $Port = 8095,
-  [string] $ConfigPath = "$PSScriptRoot\connectors-env.json"
+  [string] $ConfigPath = "$PSScriptRoot\connectors-env.json",
+  [int] $ProxyTimeoutMs = 8000
 )
 
 $ErrorActionPreference = "Stop"
@@ -68,6 +69,8 @@ function Proxy-Request($ctx, [string]$env, [string]$tail) {
   $req = [Net.HttpWebRequest]::Create($target)
   $req.Method = $ctx.Request.HttpMethod
   $req.Accept = "application/json"
+  $req.Timeout = $ProxyTimeoutMs
+  $req.ReadWriteTimeout = $ProxyTimeoutMs
 
   foreach ($h in $ctx.Request.Headers.AllKeys) {
     if ($h -match "^(Host|Connection|Content-Length|Transfer-Encoding|Keep-Alive|Proxy-Connection)$") { continue }

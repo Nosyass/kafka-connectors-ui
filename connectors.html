@@ -111,7 +111,8 @@ const model = {
   toastSeq: 0,
   envConfigSource: 'localStorage',
   loading: false,
-  requestSeq: 0
+  requestSeq: 0,
+  activeLoadController: null
 };
 
 if (location.protocol === 'file:') {
@@ -198,20 +199,38 @@ async function fetchJson(path, options = {}) {
   const method = options.method || 'GET';
   const headers = { ...buildHeaders(), ...(options.headers || {}) };
   if (options.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
-  const res = await fetch(buildUrl(path), { ...options, method, headers });
-  const text = await res.text();
-  let body = text;
-  try { body = text ? JSON.parse(text) : {}; } catch {}
-  if (!res.ok) {
-    const msg = body && typeof body === 'object'
-      ? (body.message || body.error || JSON.stringify(body))
-      : (body || res.statusText);
-    throw new Error(method + ' ' + path + ' -> HTTP ' + res.status + ' ' + msg);
+  const timeoutMs = options.timeoutMs ?? 12000;
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+  if (options.signal) {
+    if (options.signal.aborted) controller.abort();
+    else options.signal.addEventListener('abort', () => controller.abort(), { once: true });
   }
-  return body;
+  const { timeoutMs: _timeoutMs, signal: _signal, ...fetchOptions } = options;
+  try {
+    const res = await fetch(buildUrl(path), { ...fetchOptions, method, headers, signal: controller.signal });
+    const text = await res.text();
+    let body = text;
+    try { body = text ? JSON.parse(text) : {}; } catch {}
+    if (!res.ok) {
+      const msg = body && typeof body === 'object'
+        ? (body.message || body.error || JSON.stringify(body))
+        : (body || res.statusText);
+      throw new Error(method + ' ' + path + ' -> HTTP ' + res.status + ' ' + msg);
+    }
+    return body;
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error(method + ' ' + path + ' -> timeout');
+    throw e;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 }
 
 async function loadConnectors(selectName, options = {}) {
+  if (model.activeLoadController) model.activeLoadController.abort();
+  const loadController = new AbortController();
+  model.activeLoadController = loadController;
   const requestId = ++model.requestSeq;
   const requestEnv = model.env;
   const requestMode = model.mode;
@@ -226,14 +245,13 @@ async function loadConnectors(selectName, options = {}) {
     render();
   }
   try {
-    const [cluster, expanded] = await Promise.all([
-      fetchJson('/').catch(e => ({ error: e.message })),
-      fetchJson('/connectors?expand=status&expand=info')
-    ]);
+    const expanded = await fetchJson('/connectors?expand=status&expand=info', {
+      signal: loadController.signal,
+      timeoutMs: 12000
+    });
     if (requestId !== model.requestSeq || requestEnv !== model.env || requestMode !== model.mode) {
       return;
     }
-    model.cluster = cluster;
     model.connectors = normalizeConnectors(expanded);
     if (selectName) model.selected = model.connectors.find(c => c.name === selectName) || null;
     model.lastUpdatedAt = new Date();
@@ -244,6 +262,18 @@ async function loadConnectors(selectName, options = {}) {
     }
     model.loadedOnce = true;
     model.loading = false;
+    if (model.activeLoadController === loadController) model.activeLoadController = null;
+    fetchJson('/', { signal: loadController.signal, timeoutMs: 2500 })
+      .then(cluster => {
+        if (requestId !== model.requestSeq || requestEnv !== model.env || requestMode !== model.mode) return;
+        model.cluster = cluster;
+        renderHeader();
+      })
+      .catch(e => {
+        if (requestId !== model.requestSeq || requestEnv !== model.env || requestMode !== model.mode) return;
+        model.cluster = { error: e.message };
+        renderHeader();
+      });
   } catch (e) {
     if (requestId !== model.requestSeq || requestEnv !== model.env || requestMode !== model.mode) {
       return;
@@ -252,6 +282,7 @@ async function loadConnectors(selectName, options = {}) {
     model.connectors = [];
     model.selected = null;
     model.loading = false;
+    if (model.activeLoadController === loadController) model.activeLoadController = null;
     toast(model.lastError, 'error');
   }
   render();
@@ -654,7 +685,9 @@ async function boot() {
   await loadEnvConfigFile();
   render();
   await loadConnectors(null, { notifyLoaded: true });
-  setInterval(() => loadConnectors(model.selected && model.selected.name, { notifyChanges: true }), 15000);
+  setInterval(() => {
+    if (!model.loading) loadConnectors(model.selected && model.selected.name, { notifyChanges: true });
+  }, 15000);
 }
 
 boot();
