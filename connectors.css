@@ -52,6 +52,40 @@ h3 { font-size: 13px; color: #cbd5e1; margin: 18px 0 8px; }
 .muted { color: var(--muted); }
 #last-update { margin-top: 3px; font-size: 12px; }
 
+.load-indicator,
+.table-loader {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: #bae6fd;
+  font-weight: 800;
+}
+.load-indicator {
+  min-height: 34px;
+  border: 1px solid rgba(56, 189, 248, .36);
+  border-radius: 999px;
+  padding: 6px 11px;
+  background: rgba(14, 165, 233, .12);
+}
+.table-loader {
+  justify-content: center;
+  width: 100%;
+  min-height: 92px;
+  font-size: 13px;
+}
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 3px solid rgba(186, 230, 253, .28);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .75s linear infinite;
+  flex: 0 0 auto;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 button,
 select,
 input,
