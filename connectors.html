@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -11,8 +11,8 @@
   <div class="title-row">
     <div>
       <h1>Kafka Connect Console</h1>
-      <p id="cluster-info" class="muted">Worker non charge.</p>
-      <p id="last-update" class="muted">Derniere mise a jour: jamais</p>
+      <p id="cluster-info" class="muted">Worker not loaded.</p>
+      <p id="last-update" class="muted">Last update: never</p>
     </div>
     <div class="actions">
       <button id="refresh">Refresh</button>
@@ -22,39 +22,39 @@
   </div>
 
   <div class="env-row">
-    <select id="env-select" title="Environnement"></select>
-    <select id="mode-select" title="Mode d'appel">
+    <select id="env-select" title="Environment"></select>
+    <select id="mode-select" title="Call mode">
       <option value="direct">Direct</option>
-      <option value="proxy">Proxy transparent</option>
+      <option value="proxy">Transparent proxy</option>
     </select>
-    <input id="base-url" placeholder="Kafka Connect base URL reelle, ex: https://... ou http://localhost:8083" />
+    <input id="base-url" placeholder="Real Kafka Connect base URL, e.g. https://... or http://localhost:8083" />
     <button class="ok" id="save-env">Save</button>
   </div>
 
   <div class="toolbar">
-    <input id="search" placeholder="Filtrer par nom, topic, classe..." />
+    <input id="search" placeholder="Filter by name, topic, class..." />
     <select id="state-filter">
-      <option value="">Tous les etats</option>
+      <option value="">All states</option>
       <option value="RUNNING">RUNNING</option>
       <option value="PAUSED">PAUSED</option>
       <option value="FAILED">FAILED</option>
       <option value="UNASSIGNED">UNASSIGNED</option>
       <option value="RESTARTING">RESTARTING</option>
     </select>
-    <input id="auth-header" placeholder="Header optionnel, ex: Authorization: Bearer xxx" />
+    <input id="auth-header" placeholder="Optional header, e.g. Authorization: Bearer xxx" />
   </div>
 </header>
 
 <main>
   <section class="notice">
-    <strong>Mode direct :</strong> le navigateur appelle l'URL Kafka Connect du champ base URL.
-    <strong>Mode proxy transparent :</strong> la page appelle automatiquement <code>/proxy/{env}</code>,
-    et le script PowerShell relaie vers l'URL reelle declaree dans <code>connectors-env.json</code>.
+    <strong>Direct mode:</strong> the browser calls the Kafka Connect URL from the base URL field.
+    <strong>Transparent proxy mode:</strong> the page automatically calls <code>/proxy/{env}</code>,
+    and the PowerShell script forwards the request to the real URL declared in <code>connectors-env.json</code>.
   </section>
   <section id="file-warning" class="notice" hidden>
-    <strong>Page ouverte en file:// :</strong> le navigateur peut bloquer les appels vers DEV/UAT/STA/PROD avec CORS.
-    Lance <code>start-connectors-console.bat</code>, ouvre <code>http://localhost:8095/connectors.html</code>,
-    puis selectionne le mode <code>Proxy transparent</code>.
+    <strong>Page opened with file://:</strong> the browser can block calls to DEV/UAT/STA/PROD because of CORS.
+    Run <code>start-connectors-console.bat</code>, open <code>http://localhost:8095/connectors.html</code>,
+    then select <code>Transparent proxy</code> mode.
   </section>
 
   <section id="summary" class="summary"></section>
@@ -64,9 +64,9 @@
       <table id="connectors-table">
         <thead>
         <tr>
-          <th>Nom</th>
+          <th>Name</th>
           <th>Topics</th>
-          <th>Etat</th>
+          <th>State</th>
           <th>Tasks</th>
           <th>Actions</th>
         </tr>
@@ -77,8 +77,8 @@
   </section>
 
   <p class="footer-note">
-    Les valeurs contenant secret/password/token/authorization sont masquees a l'affichage.
-    Les actions pause/resume/restart/delete appellent directement l'API Kafka Connect de l'environnement selectionne.
+    Values containing secret/password/token/authorization are masked on screen.
+    Pause/resume/restart/delete actions call the Kafka Connect API of the selected environment directly.
   </p>
 </main>
 
@@ -181,7 +181,7 @@ function buildUrl(path) {
     return `/proxy/${encodeURIComponent(model.env)}${cleanPath}`;
   }
   const base = currentBaseUrl();
-  if (!base) throw new Error('Base URL vide pour ' + model.env);
+  if (!base) throw new Error('Empty base URL for ' + model.env);
   return base + cleanPath;
 }
 
@@ -396,18 +396,18 @@ function renderHeader() {
   $('refresh').disabled = model.loading;
   const c = model.cluster || {};
   const route = model.mode === 'proxy'
-    ? `proxy transparent /proxy/${model.env} -> ${currentBaseUrl() || 'URL du fichier connectors-env.json'}`
-    : `direct -> ${currentBaseUrl() || 'URL vide'}`;
-  const source = model.envConfigSource === 'connectors-env.json' ? 'config connectors-env.json' : 'config locale';
+    ? `transparent proxy /proxy/${model.env} -> ${currentBaseUrl() || 'URL from connectors-env.json'}`
+    : `direct -> ${currentBaseUrl() || 'empty URL'}`;
+  const source = model.envConfigSource === 'connectors-env.json' ? 'connectors-env.json config' : 'local config';
   const text = c.version
     ? `Kafka Connect ${c.version} - ${c.kafka_cluster_id || 'cluster ?'} - ${route} - ${source}`
     : model.lastError
-      ? `Erreur: ${model.lastError}`
+      ? `Error: ${model.lastError}`
       : `Env ${model.env.toUpperCase()} - ${route} - ${source}`;
   $('cluster-info').textContent = text;
   $('last-update').textContent = model.lastUpdatedAt
-    ? `Derniere mise a jour: ${model.lastUpdatedAt.toLocaleString()}`
-    : 'Derniere mise a jour: jamais';
+    ? `Last update: ${model.lastUpdatedAt.toLocaleString()}`
+    : 'Last update: never';
 }
 
 function renderSummary() {
@@ -430,7 +430,7 @@ function renderTable() {
       <td><b>${esc(c.name)}</b><small>${esc(connectorClass(c))}</small></td>
       <td>${renderTopics(c)}</td>
       <td><span class="state ${stateClass(c.connectorState)}">${esc(c.connectorState)}</span></td>
-      <td>${tasks || '<span class="muted">aucune</span>'}</td>
+      <td>${tasks || '<span class="muted">none</span>'}</td>
       <td class="row-actions" onclick="event.stopPropagation()">
         <button onclick="connectorAction('${escAttr(c.name)}','restart')">Restart</button>
         <button class="secondary" onclick="connectorAction('${escAttr(c.name)}','pause')">Pause</button>
@@ -440,11 +440,11 @@ function renderTable() {
   }).join('');
   if (model.loading && !model.connectors.length) {
     document.querySelector('#connectors-table tbody').innerHTML =
-      '<tr><td colspan="5"><div class="table-loader"><span class="spinner"></span><span>Chargement des connecteurs...</span></div></td></tr>';
+      '<tr><td colspan="5"><div class="table-loader"><span class="spinner"></span><span>Loading connectors...</span></div></td></tr>';
     return;
   }
   document.querySelector('#connectors-table tbody').innerHTML =
-    rows || `<tr><td colspan="5" class="${model.lastError ? 'error' : 'muted'}">${esc(model.lastError || 'Aucun connecteur.')}</td></tr>`;
+    rows || `<tr><td colspan="5" class="${model.lastError ? 'error' : 'muted'}">${esc(model.lastError || 'No connector.')}</td></tr>`;
 }
 
 function renderDetail() {
@@ -476,7 +476,7 @@ function renderDetail() {
   const configJson = JSON.stringify(maskConfig(c.config || {}), null, 2);
   const configContent = model.configViewMode === 'json'
     ? `<pre class="config-json">${esc(configJson)}</pre>`
-    : `<div class="config-list">${configRows || '<p class="muted">Aucune config.</p>'}</div>`;
+    : `<div class="config-list">${configRows || '<p class="muted">No config.</p>'}</div>`;
   drawer.innerHTML = `
     <div class="drawer-head">
       <div>
@@ -485,7 +485,7 @@ function renderDetail() {
       </div>
       <div class="drawer-head-actions">
         <span class="state ${stateClass(c.connectorState)}">${esc(c.connectorState)}</span>
-        <button class="drawer-close secondary" onclick="closeDetail()" title="Fermer">X</button>
+        <button class="drawer-close secondary" onclick="closeDetail()" title="Close">X</button>
       </div>
     </div>
     <div class="actions">
@@ -496,15 +496,15 @@ function renderDetail() {
       <button class="danger" onclick="deleteConnector('${escAttr(c.name)}')">Delete</button>
     </div>
     <h3>Tasks</h3>
-    ${tasks || '<p class="muted">Aucune task.</p>'}
+    ${tasks || '<p class="muted">No task.</p>'}
     <div class="section-title">
       <h3>Config</h3>
       <div class="config-tools">
         <div class="segmented">
-          <button class="${model.configViewMode === 'list' ? 'active' : ''}" onclick="setConfigViewMode('list')">Liste</button>
+          <button class="${model.configViewMode === 'list' ? 'active' : ''}" onclick="setConfigViewMode('list')">List</button>
           <button class="${model.configViewMode === 'json' ? 'active' : ''}" onclick="setConfigViewMode('json')">JSON</button>
         </div>
-        <button class="secondary copy-button" onclick="copySelectedConfig()" title="Copier la config JSON">Copier</button>
+        <button class="secondary copy-button" onclick="copySelectedConfig()" title="Copy config as JSON">Copy</button>
       </div>
     </div>
     ${configContent}
@@ -545,9 +545,9 @@ async function copySelectedConfig() {
       document.execCommand('copy');
       textarea.remove();
     }
-    toast('Config JSON copiee', 'ok');
+    toast('Config JSON copied', 'ok');
   } catch (e) {
-    toast('Copie impossible: ' + (e.message || e), 'error');
+    toast('Copy failed: ' + (e.message || e), 'error');
   }
 }
 
@@ -588,7 +588,7 @@ async function connectorAction(name, action) {
 }
 
 async function restartTask(name, id) {
-  if (!confirm(`Confirmer le redemarrage de la task ${id} ?\n\nConnecteur:\n${name}`)) return;
+  if (!confirm(`Confirm task ${id} restart?\n\nConnector:\n${name}`)) return;
   try {
     await fetchJson(`/connectors/${apiName(name)}/tasks/${id}/restart`, { method: 'POST' });
     toast(`Restart task ${id}: ${name}`, 'ok');
@@ -600,7 +600,7 @@ async function restartTask(name, id) {
 
 async function deleteConnector(name) {
   if (!confirmConnectorAction(name, 'delete')) return;
-  const typed = prompt(`Tape le nom exact pour supprimer le connecteur:\n${name}`);
+  const typed = prompt(`Type the exact connector name to delete it:\n${name}`);
   if (typed !== name) return;
   try {
     await fetchJson(`/connectors/${apiName(name)}`, { method: 'DELETE' });
@@ -614,20 +614,20 @@ async function deleteConnector(name) {
 
 function confirmConnectorAction(name, action) {
   const labels = {
-    restart: 'redemarrer le connecteur',
-    restartFailed: 'redemarrer uniquement les tasks en erreur',
-    pause: 'mettre le connecteur en pause',
-    resume: 'reprendre le connecteur',
-    delete: 'supprimer definitivement le connecteur'
+    restart: 'restart the connector',
+    restartFailed: 'restart failed tasks only',
+    pause: 'pause the connector',
+    resume: 'resume the connector',
+    delete: 'permanently delete the connector'
   };
   const warnings = {
-    restart: 'Cela peut relancer la consommation selon les offsets commites.',
-    restartFailed: 'Seules les tasks en erreur seront ciblees.',
-    pause: 'Le connecteur arretera de consommer tant qu il reste en pause.',
-    resume: 'Le connecteur recommencera a consommer.',
-    delete: 'Action destructive. La configuration sera supprimee de Kafka Connect.'
+    restart: 'This may restart consumption depending on committed offsets.',
+    restartFailed: 'Only failed tasks will be targeted.',
+    pause: 'The connector will stop consuming while it remains paused.',
+    resume: 'The connector will start consuming again.',
+    delete: 'Destructive action. The configuration will be deleted from Kafka Connect.'
   };
-  return confirm(`Confirmer l action: ${labels[action] || action} ?\n\nConnecteur:\n${name}\n\n${warnings[action] || ''}`);
+  return confirm(`Confirm action: ${labels[action] || action}?\n\nConnector:\n${name}\n\n${warnings[action] || ''}`);
 }
 
 function actionLabel(action) {
@@ -646,7 +646,7 @@ function toast(message, type = 'info') {
   const el = document.createElement('div');
   el.className = `toast ${type}`;
   el.dataset.id = String(id);
-  el.innerHTML = `<button type="button" title="Fermer">X</button><span>${esc(message)}</span>`;
+  el.innerHTML = `<button type="button" title="Close">X</button><span>${esc(message)}</span>`;
   el.querySelector('button').addEventListener('click', () => el.remove());
   root.prepend(el);
   window.setTimeout(() => {
@@ -673,7 +673,7 @@ function importConfig(file) {
       render();
       loadConnectors();
     } catch (e) {
-      alert('Import impossible: ' + e.message);
+      alert('Import failed: ' + e.message);
     }
   };
   reader.readAsText(file);

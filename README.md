@@ -1,57 +1,59 @@
 # Portable Kafka Connect Console
 
-Petite console statique pour piloter des connecteurs Kafka Connect depuis une machine Windows de rebond.
+Small static console to manage Kafka Connect connectors from a Windows jump box.
 
-## Mode direct
+## Direct Mode
 
-Ouvre `connectors.html` dans un navigateur, puis renseigne l'URL Kafka Connect de l'environnement:
+Open `connectors.html` in a browser, then fill in the Kafka Connect URL for the target environment:
 
 - DEV: `http://host-dev:8083`
 - UAT: `https://...`
 - STA: `https://...`
 - PROD: `https://...`
 
-Limite: le mode direct depend des headers CORS exposes par Kafka Connect ou par le reverse proxy.
+Limit: direct mode depends on the CORS headers exposed by Kafka Connect or by the reverse proxy.
 
-## Mode proxy Windows
+## Windows Proxy Mode
 
-Si le navigateur bloque les appels avec une erreur CORS, utilise le proxy local PowerShell:
+If the browser blocks calls with a CORS error, use the local PowerShell proxy:
 
 ```powershell
-cd C:\chemin\vers\portable-connectors-console
+cd C:\path\to\portable-connectors-console
 copy connectors-env.example.json connectors-env.json
 notepad connectors-env.json
 .\start-connectors-console.ps1 -Port 8095
 ```
 
-Ou plus simple: double-clique sur `start-connectors-console.bat`.
+Or simply double-click `start-connectors-console.bat`.
 
-Puis ouvre:
+Then open:
 
 ```text
 http://localhost:8095/connectors.html
 ```
 
-La page charge automatiquement `connectors-env.json` au demarrage quand elle est servie par le launcher local.
+The page automatically loads `connectors-env.json` at startup when served by the local launcher.
 
-Dans la page:
+In the page:
 
-- selectionne l'environnement
-- selectionne `Proxy transparent`
-- l'URL reelle du fichier est affichee dans le champ base URL, mais les appels partiront automatiquement via `/proxy/<env>`
+- select the environment
+- select `Transparent proxy`
+- the real URL from the file is shown in the base URL field, but calls are automatically sent through `/proxy/<env>`
 
-Le navigateur appelle `localhost`, et le script PowerShell relaie vers les vrais endpoints Kafka Connect.
+The browser calls `localhost`, and the PowerShell script forwards requests to the real Kafka Connect endpoints.
 
-Important: si tu ouvres `connectors.html` en `file://`, les endpoints DEV/UAT/STA/PROD peuvent etre bloques par CORS.
-Dans ce cas il faut passer par `http://localhost:8095/connectors.html` et utiliser le mode `Proxy transparent`.
+Important: if you open `connectors.html` with `file://`, DEV/UAT/STA/PROD endpoints may be blocked by CORS.
+In that case, use `http://localhost:8095/connectors.html` and select `Transparent proxy` mode.
 
-## Actions disponibles
+## Available Actions
 
-- lister les connecteurs et leurs tasks
-- filtrer par nom/topic/classe/etat
-- consulter la config en masquant les secrets
+- list connectors and their tasks
+- filter by name/topic/class/state
+- inspect config with secrets masked
+- view config as a key/value list or formatted JSON
+- copy masked config as JSON
 - restart connector
 - restart failed tasks
 - restart task
 - pause/resume
-- delete avec confirmation par nom exact
+- delete with exact-name confirmation
